@@ -49,15 +49,55 @@ details below.
 
 ### On macOS
 
-Make sure you have [CMake](https://cmake.org) >= 3.15 and XCode. Then run:
+The project builds cleanly on macOS Sequoia (15) with Xcode 16 using the
+bundled JUCE + AOO dependencies. Follow these steps on a fresh system:
+
+1) Install Xcode 16.x (includes macOS 15 SDK)
+
+- From the Mac App Store, install Xcode.
+- Open Xcode once to finish setup and accept the license, or run:
+  - `sudo xcodebuild -license`
+  - `xcode-select -p` (should print a path; if not, run `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`)
+
+2) Install CMake (3.15 or newer)
+
+- Recommended via Homebrew: `brew install cmake`
+  - If you don't have Homebrew: see https://brew.sh
+- Alternatively download the CMake macOS installer from https://cmake.org/download/
+  and install the command-line tools (the app has a menu entry to "Install command line links").
+
+3) Clone and build SonoBus
+
 ```
-./setupcmake.sh
-./buildcmake.sh
-``` 
-The resulting application and plugins will end up under `build/SonoBus_artefacts/Release`
-when the build completes. If you would rather have an Xcode project to look
-at, use `./setupcmakexcode.sh` instead and use the Xcode project that gets
-produced at `buildXcode/SonoBus.xcodeproj`.
+git clone https://github.com/sonosaurus/sonobus.git
+cd sonobus
+./setupcmake.sh           # configure (Release by default)
+./buildcmake.sh           # build app + AU + VST3
+```
+
+- The resulting artefacts are placed under:
+  - App: `build/SonoBus_artefacts/Release/Standalone/SonoBus.app`
+  - AU:  `build/SonoBus_artefacts/Release/AU/SonoBus.component`
+  - VST3:`build/SonoBus_artefacts/Release/VST3/SonoBus.vst3`
+
+4) Optional: Generate an Xcode project
+
+```
+./setupcmakexcode.sh
+open buildXcode/SonoBus.xcodeproj
+```
+
+Notes and troubleshooting (macOS)
+
+- Dependencies: All third-party sources (JUCE, AOO) and a prebuilt Opus library are included in this repo; no additional SDKs are required to build the app, AU, and VST3.
+- Toolchain: Building on Sequoia requires Xcode 16 (macOS 15 SDK) or newer. The bundled JUCE fork is already compatible with the macOS 15 SDK.
+- Universal build: By default CMake produces a universal binary (arm64 + x86_64). To build arm64-only, configure with `-DUniversalBinary=OFF` when running CMake (e.g. edit `setupcmake.sh` or invoke CMake manually).
+- Code signing: CMake applies ad-hoc signatures to the built plugins for local use. Notarization/signing for distribution is up to you.
+- AAX/VST2 (optional):
+  - AAX: Set `AAX_SDK_PATH` in the environment before running `./setupcmake.sh` to enable AAX targets.
+  - VST2: Requires Steinberg's discontinued VST2 SDK and a valid license; set `VST2_SDK_PATH` to enable VST2 targets.
+
+If you hit issues, please include your `cmake --version`, `xcodebuild -version`, and the last 200 lines of your build output when filing an issue.
 
 ### On Windows
 
