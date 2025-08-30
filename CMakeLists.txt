@@ -436,6 +436,16 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
     endforeach()
     
     
+    # Allow disabling ASIO on Windows CI if ASIO SDK isn't available
+    # Default: ON for local Windows builds, OFF elsewhere
+    set(JUCE_ASIO_ENABLED 0)
+    if (WIN32)
+        option(SONOBUS_ENABLE_ASIO "Enable JUCE ASIO backend (requires Steinberg ASIO SDK)" ON)
+        if (SONOBUS_ENABLE_ASIO)
+            set(JUCE_ASIO_ENABLED 1)
+        endif()
+    endif()
+
     target_compile_definitions("${target_name}"
         PUBLIC
         JUCE_WEB_BROWSER=0
@@ -445,7 +455,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1
 	JUCE_USE_WINDOWS_MEDIA_FORMAT=1
         JUCE_LOAD_CURL_SYMBOLS_LAZILY=1
-        JUCE_ASIO=1
+        JUCE_ASIO=${JUCE_ASIO_ENABLED}
         JUCE_WASAPI=1
         JUCE_DIRECTSOUND=0
         JUCE_JACK=1
@@ -628,4 +638,3 @@ sono_add_custom_plugin_target(SonoBus SonoBus "${FormatsToBuild}" FALSE  "NBus")
 
 # add VSTi target
 sono_add_custom_plugin_target(SonoBusInst "SonoBusInstrument" "VST3" TRUE  "IBus")
-

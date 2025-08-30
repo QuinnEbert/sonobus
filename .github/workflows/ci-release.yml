@@ -80,7 +80,7 @@ jobs:
       - name: Configure (CMake)
         shell: pwsh
         run: |
-          cmake -S . -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -DCMAKE_BUILD_TYPE=Release -DSONOBUS_ENABLE_ASIO=OFF
 
       - name: Build (CMake)
         shell: pwsh
@@ -129,4 +129,3 @@ jobs:
           prerelease: true
           files: |
             release/*.zip
-
