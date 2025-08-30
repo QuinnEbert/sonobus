@@ -210,6 +210,10 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         list (APPEND PlatSourceFiles  Source/CrossPlatformUtilsMac.mm)
     elseif (WIN32)
         list (APPEND HEADER_INCLUDES deps/windows ../asiosdk/common)
+        # If an external ASIO SDK path is provided, include it as well
+        if (ASIO_SDK_PATH)
+            list (APPEND HEADER_INCLUDES ${ASIO_SDK_PATH}/common)
+        endif()
         list (APPEND PlatSourceFiles  Source/CrossPlatformUtilsWindows.cpp)
 
 	message (STATUS "Win generator platform is: ${CMAKE_VS_PLATFORM_NAME}" )

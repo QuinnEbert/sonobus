@@ -81,10 +81,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Fetch ASIO SDK (private URL)
+        if: ${{ secrets.ASIO_SDK_URL != '' }}
+        shell: pwsh
+        env:
+          ASIO_SDK_URL: ${{ secrets.ASIO_SDK_URL }}
+        run: |
+          $url = $env:ASIO_SDK_URL
+          Write-Host "Downloading ASIO SDK from secret URL"
+          Invoke-WebRequest -Uri $url -OutFile asiosdk.zip
+          New-Item -ItemType Directory -Path asiosdk -Force | Out-Null
+          Expand-Archive -Path asiosdk.zip -DestinationPath asiosdk -Force
+          $sdkRoot = Join-Path (Resolve-Path ".").Path "asiosdk"
+          $commonPath = Join-Path $sdkRoot "common"
+          if (-not (Test-Path $commonPath)) {
+            $candidate = Get-ChildItem -Recurse -Directory -Path $sdkRoot | Where-Object { Test-Path (Join-Path $_.FullName "common") } | Select-Object -First 1
+            if ($candidate) {
+              $sdkRoot = $candidate.FullName
+            }
+          }
+          echo "ASIO_SDK_PATH=$sdkRoot" >> $env:GITHUB_ENV
+          echo "ENABLE_ASIO=ON" >> $env:GITHUB_ENV
+
       - name: Configure (CMake)
         shell: pwsh
         run: |
-          cmake -S . -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -DCMAKE_BUILD_TYPE=Release -DSONOBUS_ENABLE_ASIO=OFF
+          if ($env:ENABLE_ASIO -eq "ON" -and $env:ASIO_SDK_PATH) {
+            cmake -S . -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -DCMAKE_BUILD_TYPE=Release -DSONOBUS_ENABLE_ASIO=ON -DASIO_SDK_PATH="$env:ASIO_SDK_PATH"
+          } else {
+            cmake -S . -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -DCMAKE_BUILD_TYPE=Release -DSONOBUS_ENABLE_ASIO=OFF
+          }
 
       - name: Build (CMake)
         shell: pwsh
