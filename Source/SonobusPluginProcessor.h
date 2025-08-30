@@ -269,6 +269,8 @@ public:
     static String paramDefaultPeerLevel;
     static String paramSyncMetToHost;
     static String paramSyncMetToFilePlayback;
+    // Offset metronome phase by peers' latencies
+    static String paramMetAlignToPeers;
     static String paramInputReverbLevel;
     static String paramInputReverbSize;
     static String paramInputReverbDamping;
@@ -993,6 +995,9 @@ private:
     Atomic<float>   mDefUserLevel    { 1.0f };
     Atomic<bool>   mSyncMetToHost  { false };
     Atomic<bool>   mSyncMetStartToPlayback  { false };
+    // Metronome latency alignment
+    Atomic<bool>   mMetAlignToPeers { false };
+    double         mLastMetAlignBeats = 0.0; // last applied phase offset (in beats)
     Atomic<bool>   mReconnectAfterServerLoss  { true };
 
     Atomic<float>   mInputReverbLevel  { 1.0f };

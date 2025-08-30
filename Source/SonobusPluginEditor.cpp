@@ -617,6 +617,14 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
     mMetSyncFileButton->setColour(TextButton::textColourOnId, Colours::darkblue);
     mMetSyncFileButton->setTooltip(TRANS("Synchronize metronome start with file playback"));
 
+    mMetAlignPeersButton = std::make_unique<TextButton>("metalign");
+    mMetAlignPeersButton->setButtonText(TRANS("Align to Peers"));
+    mMetAlignPeersButton->setLookAndFeel(&smallLNF);
+    mMetAlignPeersButton->setClickingTogglesState(true);
+    mMetAlignPeersButton->setColour(TextButton::buttonOnColourId, Colour::fromFloatRGBA(0.6, 0.9, 1.0, 0.7f));
+    mMetAlignPeersButton->setColour(TextButton::textColourOnId, Colours::darkblue);
+    mMetAlignPeersButton->setTooltip(TRANS("Offset metronome by average outgoing latency to other peers so your playing arrives in time."));
+
     
     mDrySlider     = std::make_unique<Slider>(Slider::LinearHorizontal,  Slider::TextBoxAbove);
     mDrySlider->setName("dry");
@@ -685,6 +693,7 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
     mMetSendAttachment = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment> (p.getValueTreeState(), SonobusAudioProcessor::paramSendMetAudio, *mMetSendButton);
     mMetSyncAttachment = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment> (p.getValueTreeState(), SonobusAudioProcessor::paramSyncMetToHost, *mMetSyncButton);
     mMetSyncFileAttachment = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment> (p.getValueTreeState(), SonobusAudioProcessor::paramSyncMetToFilePlayback, *mMetSyncFileButton);
+    mMetAlignAttachment = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment> (p.getValueTreeState(), SonobusAudioProcessor::paramMetAlignToPeers, *mMetAlignPeersButton);
 
     
     processor.getValueTreeState().addParameterListener (SonobusAudioProcessor::paramMainSendMute, this);
@@ -1202,6 +1211,7 @@ SonobusAudioProcessorEditor::SonobusAudioProcessorEditor (SonobusAudioProcessor&
     mMetContainer->addAndMakeVisible(mMetTempoSliderLabel.get());
     mMetContainer->addAndMakeVisible(mMetSendButton.get());
     mMetContainer->addAndMakeVisible(mMetSyncFileButton.get());
+    mMetContainer->addAndMakeVisible(mMetAlignPeersButton.get());
 
     if (!JUCEApplicationBase::isStandaloneApp()) {
         mMetContainer->addAndMakeVisible(mMetSyncButton.get());
@@ -4880,6 +4890,8 @@ void SonobusAudioProcessorEditor::updateLayout()
         metSendSyncBox.items.add(FlexItem(2, 5).withMargin(0).withFlex(0));
     }
     metSendSyncBox.items.add(FlexItem(40, minitemheight, *mMetSyncFileButton).withMargin(0).withFlex(1));
+    metSendSyncBox.items.add(FlexItem(2, 5).withMargin(0).withFlex(0));
+    metSendSyncBox.items.add(FlexItem(40, minitemheight, *mMetAlignPeersButton).withMargin(0).withFlex(1));
 
 
     metSendBox.items.clear();
@@ -6040,4 +6052,3 @@ void SonobusAudioProcessorEditor::SonobusMenuBarModel::menuItemSelected (int men
     }
 #endif
 }
-

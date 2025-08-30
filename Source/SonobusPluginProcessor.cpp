@@ -75,6 +75,7 @@ String SonobusAudioProcessor::paramAutoReconnectLast  ("reconnectlast");
 String SonobusAudioProcessor::paramDefaultPeerLevel  ("defPeerLevel");
 String SonobusAudioProcessor::paramSyncMetToHost  ("syncMetHost");
 String SonobusAudioProcessor::paramSyncMetToFilePlayback  ("syncMetFile");
+String SonobusAudioProcessor::paramMetAlignToPeers ("metAlignPeers");
 String SonobusAudioProcessor::paramInputReverbLevel  ("inreverblevel");
 String SonobusAudioProcessor::paramInputReverbSize  ("inreverbsize");
 String SonobusAudioProcessor::paramInputReverbDamping  ("inreverbdamp");
@@ -675,6 +676,7 @@ mState (*this, &mUndoManager, "SonoBusAoO",
                                           [](float v, int maxlen) -> String { return Decibels::toString(Decibels::gainToDecibels(v), 1); },
                                           [](const String& s) -> float { return Decibels::decibelsToGain(s.getFloatValue()); }),
     std::make_unique<AudioParameterBool>(ParameterID(paramSyncMetToHost, 1), TRANS ("Sync to Host"), JUCEApplicationBase::isStandaloneApp() ? false : true),
+    std::make_unique<AudioParameterBool>(ParameterID(paramMetAlignToPeers, 1), TRANS ("Align Met to Peers"), false),
     std::make_unique<AudioParameterFloat>(ParameterID(paramInputReverbLevel, 1),     TRANS ("Input Reverb Level"),    NormalisableRange<float>(0.0,    1.0, 0.0, 0.4), mInputReverbLevel.get(), "", AudioProcessorParameter::genericParameter,
                                           [](float v, int maxlen) -> String { return Decibels::toString(Decibels::gainToDecibels(v), 1); },
                                           [](const String& s) -> float { return Decibels::decibelsToGain(s.getFloatValue()); }),
@@ -723,6 +725,7 @@ mState (*this, &mUndoManager, "SonoBusAoO",
     mState.addParameterListener (paramMainMonitorSolo, this);
     mState.addParameterListener (paramDefaultPeerLevel, this);
     mState.addParameterListener (paramSyncMetToHost, this);
+    mState.addParameterListener (paramMetAlignToPeers, this);
     mState.addParameterListener (paramSyncMetToFilePlayback, this);
     mState.addParameterListener (paramInputReverbSize, this);
     mState.addParameterListener (paramInputReverbLevel, this);
@@ -6596,6 +6599,9 @@ void SonobusAudioProcessor::parameterChanged (const String &parameterID, float n
     else if (parameterID == paramSyncMetToHost) {
         mSyncMetToHost = newValue > 0;
     }
+    else if (parameterID == paramMetAlignToPeers) {
+        mMetAlignToPeers = newValue > 0;
+    }
     else if (parameterID == paramSyncMetToFilePlayback) {
         mSyncMetStartToPlayback = newValue > 0;
     }
@@ -7717,13 +7723,30 @@ void SonobusAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer
         mMetronome->setGain(metgain);
         mMetronome->setTempo(mettempo);
         double beattime = 0.0;
+        // compute phase offset (in beats) to align by average outgoing latency
+        double beatOffsetBeats = 0.0;
+        if (mMetAlignToPeers.get()) {
+            const double avgOutMs = getMonitoringDelayTimeFromAvgPeerLatency(1.0f);
+            beatOffsetBeats = -(mettempo / 60.0) * (avgOutMs * 0.001);
+        }
         if (syncmethost && hostPlaying && rposInfo->getPpqPosition()) {
             beattime = *rposInfo->getPpqPosition();
         }
         else if (syncmetplayback && mTransportSource.isPlaying()) {
             beattime = (mettempo / 60.0) * transportPos;
         }
-        mMetronome->processMix(numSamples, metBuffer.getWritePointer(0), metBuffer.getWritePointer(mainBusOutputChannels > 1 ? 1 : 0), beattime, !syncmet);
+        // apply offset depending on sync mode
+        if (syncmet) {
+            // absolute time provided, offset directly in beats
+            mMetronome->processMix(numSamples, metBuffer.getWritePointer(0), metBuffer.getWritePointer(mainBusOutputChannels > 1 ? 1 : 0), beattime + beatOffsetBeats, false);
+        } else {
+            // relative mode: adjust internal phase by delta only to avoid accumulation
+            if (fabs(beatOffsetBeats - mLastMetAlignBeats) > 1e-6) {
+                mMetronome->resetRelativeStart(mMetronome->getCurrBeatPos() + (beatOffsetBeats - mLastMetAlignBeats));
+                mLastMetAlignBeats = beatOffsetBeats;
+            }
+            mMetronome->processMix(numSamples, metBuffer.getWritePointer(0), metBuffer.getWritePointer(mainBusOutputChannels > 1 ? 1 : 0), 0.0, true);
+        }
 
         //
 
