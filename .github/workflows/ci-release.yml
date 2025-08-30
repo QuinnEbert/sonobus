@@ -103,6 +103,44 @@ jobs:
           echo "ASIO_SDK_PATH=$sdkRoot" >> $env:GITHUB_ENV
           echo "ENABLE_ASIO=ON" >> $env:GITHUB_ENV
 
+      - name: Fetch ASIO SDK headers (public base URL)
+        # Use a simple base URL that serves individual headers, if provided.
+        # Example: https://www.zedtiger.com/asio.sdk/
+        if: ${{ env.ENABLE_ASIO != 'ON' }}
+        shell: pwsh
+        env:
+          ASIO_BASE_URL: ${{ vars.ASIO_BASE_URL }}
+        run: |
+          $base = if ([string]::IsNullOrWhiteSpace($env:ASIO_BASE_URL)) { 'https://www.zedtiger.com/asio.sdk' } else { $env:ASIO_BASE_URL }
+          Write-Host "Using ASIO base URL: $base"
+          $sdkRoot = Join-Path (Resolve-Path ".").Path "asiosdk"
+          $common = Join-Path $sdkRoot "common"
+          New-Item -ItemType Directory -Force -Path $common | Out-Null
+          $headers = @('asio.h','asiosys.h','asiodrivers.h','iasiodrv.h','iasiothiscallresolver.h')
+          $downloaded = @{}
+          foreach ($h in $headers) {
+            $url = "$base/$h"
+            $dest = Join-Path $common $h
+            try {
+              Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing -ErrorAction Stop
+              Write-Host "Fetched $h"
+              $downloaded[$h] = $true
+            } catch {
+              Write-Host "Could not fetch $h from $url"
+            }
+          }
+          $essential = @('asio.h','asiosys.h','iasiodrv.h')
+          $missing = @()
+          foreach ($e in $essential) { if (-not $downloaded.ContainsKey($e)) { $missing += $e } }
+          if ($missing.Count -eq 0) {
+            echo "ASIO_SDK_PATH=$sdkRoot" >> $env:GITHUB_ENV
+            echo "ENABLE_ASIO=ON" >> $env:GITHUB_ENV
+            Write-Host "ASIO headers present; enabling ASIO."
+          } else {
+            echo "ENABLE_ASIO=OFF" >> $env:GITHUB_ENV
+            Write-Host ("Missing essential headers: {0}; ASIO disabled" -f ($missing -join ', '))
+          }
+
       - name: Configure (CMake)
         shell: pwsh
         run: |
