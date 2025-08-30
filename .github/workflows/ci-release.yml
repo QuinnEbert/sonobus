@@ -15,7 +15,11 @@ concurrency:
 jobs:
   build-macos:
     name: Build macOS (Universal)
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
