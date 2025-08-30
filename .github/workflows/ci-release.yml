@@ -73,6 +73,9 @@ jobs:
   build-windows:
     name: Build Windows (${{ matrix.arch }})
     runs-on: windows-latest
+    env:
+      ASIO_SDK_URL: ${{ secrets.ASIO_SDK_URL }}
+      ASIO_BASE_URL: ${{ vars.ASIO_BASE_URL }}
     strategy:
       fail-fast: false
       matrix:
@@ -82,12 +85,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Fetch ASIO SDK (private URL)
-        if: ${{ secrets.ASIO_SDK_URL != '' }}
         shell: pwsh
-        env:
-          ASIO_SDK_URL: ${{ secrets.ASIO_SDK_URL }}
         run: |
           $url = $env:ASIO_SDK_URL
+          if ([string]::IsNullOrWhiteSpace($url)) { Write-Host "No ASIO_SDK_URL provided; skipping zip fetch."; exit 0 }
           Write-Host "Downloading ASIO SDK from secret URL"
           Invoke-WebRequest -Uri $url -OutFile asiosdk.zip
           New-Item -ItemType Directory -Path asiosdk -Force | Out-Null
@@ -96,9 +97,7 @@ jobs:
           $commonPath = Join-Path $sdkRoot "common"
           if (-not (Test-Path $commonPath)) {
             $candidate = Get-ChildItem -Recurse -Directory -Path $sdkRoot | Where-Object { Test-Path (Join-Path $_.FullName "common") } | Select-Object -First 1
-            if ($candidate) {
-              $sdkRoot = $candidate.FullName
-            }
+            if ($candidate) { $sdkRoot = $candidate.FullName }
           }
           echo "ASIO_SDK_PATH=$sdkRoot" >> $env:GITHUB_ENV
           echo "ENABLE_ASIO=ON" >> $env:GITHUB_ENV
@@ -106,11 +105,9 @@ jobs:
       - name: Fetch ASIO SDK headers (public base URL)
         # Use a simple base URL that serves individual headers, if provided.
         # Example: https://www.zedtiger.com/asio.sdk/
-        if: ${{ env.ENABLE_ASIO != 'ON' }}
         shell: pwsh
-        env:
-          ASIO_BASE_URL: ${{ vars.ASIO_BASE_URL }}
         run: |
+          if ($env:ENABLE_ASIO -eq "ON") { Write-Host "ASIO already enabled by zip; skipping base URL fetch."; exit 0 }
           $base = if ([string]::IsNullOrWhiteSpace($env:ASIO_BASE_URL)) { 'https://www.zedtiger.com/asio.sdk' } else { $env:ASIO_BASE_URL }
           Write-Host "Using ASIO base URL: $base"
           $sdkRoot = Join-Path (Resolve-Path ".").Path "asiosdk"
