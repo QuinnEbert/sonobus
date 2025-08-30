@@ -1,0 +1,132 @@
+name: CI Release (Windows + macOS)
+
+on:
+  push:
+    branches:
+      - '**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-macos:
+    name: Build macOS (Universal)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure (CMake)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUniversalBinary=ON
+
+      - name: Build (CMake)
+        run: |
+          cmake --build build --config Release -j$(sysctl -n hw.logicalcpu)
+
+      - name: Ad-hoc codesign bundles
+        run: |
+          set -e
+          BDIR="$(pwd)/build/SonoBus_artefacts/Release"
+          for p in \
+            "$BDIR/Standalone/SonoBus.app" \
+            "$BDIR/VST3/SonoBus.vst3" \
+            "$BDIR/AU/SonoBus.component" \
+            "$BDIR/LV2/SonoBus.lv2" ; do
+            if [ -e "$p" ]; then
+              echo "Codesigning: $p"
+              codesign -s - --deep --force "$p" || true
+            fi
+          done
+
+      - name: Package macOS artifacts
+        run: |
+          set -e
+          cd build/SonoBus_artefacts/Release
+          # Prefer zipping specific types if present; otherwise zip all contents
+          if [ -d Standalone ] || [ -d VST3 ] || [ -d AU ] || [ -d LV2 ]; then
+            zip -r ../../SonoBus-macOS-universal.zip Standalone/*.app VST3/*.vst3 AU/*.component LV2/* 2>/dev/null || true
+            # Fallback to everything under Release if patterns absent
+            if [ ! -s ../../SonoBus-macOS-universal.zip ]; then
+              zip -r ../../SonoBus-macOS-universal.zip .
+            fi
+          else
+            zip -r ../../SonoBus-macOS-universal.zip .
+          fi
+          cd -
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: build/SonoBus-macOS-universal.zip
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, Win32]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure (CMake)
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build (CMake)
+        shell: pwsh
+        run: |
+          cmake --build build --config Release -j 4
+
+      - name: Package Windows artifacts
+        shell: pwsh
+        run: |
+          $releaseDir = Join-Path (Resolve-Path ".").Path "build/SonoBus_artefacts/Release"
+          if (!(Test-Path $releaseDir)) { throw "Release directory not found: $releaseDir" }
+          $zipName = "SonoBus-Windows-${{ matrix.arch }}.zip"
+          if (Test-Path $zipName) { Remove-Item $zipName -Force }
+          Compress-Archive -Path (Join-Path $releaseDir '*') -DestinationPath $zipName -Force
+          echo "ZIP=$zipName" >> $env:GITHUB_ENV
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: ${{ env.ZIP }}
+          if-no-files-found: error
+
+  create-release:
+    name: Create unified GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-macos, build-windows]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect release payload
+        run: |
+          set -e
+          mkdir -p release
+          find artifacts -type f -name '*.zip' -print -exec cp {} release/ \;
+          echo "Collected files:" && ls -l release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.sha }}
+          name: SonoBus CI ${{ github.sha }}
+          prerelease: true
+          files: |
+            release/*.zip
+
